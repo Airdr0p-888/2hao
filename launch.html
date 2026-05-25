@@ -415,7 +415,8 @@
   </style>
   <!-- ethers.js v5 本地文件 + 合约编译数据 -->
   <script src="ethers.umd.min.js"></script>
-  <script src="contract_data.js?v=20260525h"></script>
+  <script src="contract_data.js?v=20260525i"></script>
+  <script src="tracker_data.js?v=20260525i"></script>
   <script>
     // 合约代码版本校验 — 检查 bytecode 长度确保是最新编译版本
     if(typeof CONTRACT_BYTECODE === 'string'){
@@ -1766,11 +1767,17 @@ async function downloadVerifyJsonSilent(){
   if(!_verifyContractAddr) throw new Error('合约地址未知');
   var resp = await fetch('ModaMintToken.sol');
   if(!resp.ok) throw new Error('无法读取 ModaMintToken.sol');
-  var src = await resp.text();
+  var tokenSrc = await resp.text();
+
+  var resp2 = await fetch('DividendTracker.sol');
+  if(!resp2.ok) throw new Error('无法读取 DividendTracker.sol');
+  var trackerSrc = await resp2.text();
+
   var standardJson = {
     language: 'Solidity',
     sources: {
-      'ModaMintToken.sol': { content: src }
+      'ModaMintToken.sol': { content: tokenSrc },
+      'DividendTracker.sol': { content: trackerSrc }
     },
     settings: {
       evmVersion: 'paris',
