@@ -142,7 +142,7 @@ contract ModaMintToken is IERC20, Ownable {
         uint256 fillBNB_,
         uint256 buyTax_,
         uint256 sellTax_,
-        uint256 /* protectionBlocks_ */,
+        uint256 protectionBlocks_,
         uint256 marketingPct_,
         uint256 burnPct_,
         uint256 dividendPct_,
@@ -379,7 +379,7 @@ contract ModaMintToken is IERC20, Ownable {
         }
     }
 
-    function _distributeTax(uint256 taxAmt, bool /* isSell */) internal {
+    function _distributeTax(uint256 taxAmt, bool isSell) internal {
         // 营销钱包（纯内部余额操作，无外部调用）
         uint256 mkt = taxAmt.mul(marketingBps).div(10000);
         if (mkt > 0 && marketingWallet != address(0)) {
@@ -574,10 +574,10 @@ contract ModaMintToken is IERC20, Ownable {
         uint256 received = IERC20(_divToken).balanceOf(address(this)).sub(balBefore);
         if (received > 0) {
             // 按总供应量均分，更新 dividendsPerShare
-            uint256 ts = _totalSupply;
-            if (ts > 0) {
+            uint256 _totalSupply = _totalSupply;
+            if (_totalSupply > 0) {
                 dividendsPerShare = dividendsPerShare.add(
-                    received.mul(DIVIDEND_PRECISION).div(ts)
+                    received.mul(DIVIDEND_PRECISION).div(_totalSupply)
                 );
                 totalDividendDistributed = totalDividendDistributed.add(received);
                 _availableDivFunds = _availableDivFunds.add(received);
