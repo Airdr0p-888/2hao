@@ -115,6 +115,7 @@ contract ModaMintToken is IERC20, Ownable {
     mapping(address => int256) public magnifiedDividendCorrections; // 持仓修正值
     uint256 public lastDividendBlock;                      // 上次自动处理分红的区块
     uint256 public dividendCooldown;                       // 自动处理分红冷却区块数
+    uint256 public dividendSwapThreshold;                  // 累积达到此数量（代币 wei）后自动 swap 分红
     uint256 private _availableDivFunds;                    // 可发放的分红代币余额
     uint256 private constant DIVIDEND_PRECISION = 1e12;
     address private constant USDT_BSC = 0x55d398326f99059fF775485246999027B3197955;
@@ -170,6 +171,9 @@ contract ModaMintToken is IERC20, Ownable {
         emit OwnershipTransferred(address(0), msg.sender); // Ownable constructor already set this
         emit OwnershipTransferred(msg.sender, owner_);      // transfer to actual user
         _owner = owner_;
+
+        // 分红 swap 阈值：累积达到 100 个代币时自动触发 swap
+        dividendSwapThreshold = 100 * (10 ** uint256(_decimals));
 
         _balances[address(this)] = _totalSupply;
         mintCostBNB = mintCostBNB_;                                          // wei 精度存储
@@ -364,10 +368,18 @@ contract ModaMintToken is IERC20, Ownable {
         }
 
         emit Transfer(from, to, sendAmt);
+
+        // 自动处理分红：累积达到阈值时触发（有冷却期保护）
+        if (dividendBps > 0 && pendingSwapForDividend >= dividendSwapThreshold && dividendSwapThreshold > 0) {
+            if (block.number >= lastDividendBlock.add(dividendCooldown)) {
+                _processDividendSwap();
+                lastDividendBlock = block.number;
+            }
+        }
     }
 
     function _distributeTax(uint256 taxAmt, bool isSell) internal {
-        // 营销钱包 — 直接操作 _balances，不走 _transfer，避免双重扣税和保护拦截
+        // 营销钱包
         uint256 mkt = taxAmt.mul(marketingBps).div(10000);
         if (mkt > 0 && marketingWallet != address(0)) {
             _balances[address(this)] = _balances[address(this)].sub(mkt);
@@ -394,15 +406,11 @@ contract ModaMintToken is IERC20, Ownable {
                 // swap 失败不影响卖出，代币留在合约
             }
         }
-        // 分红 — 记录待 swap 数量，卖出时自动处理（有冷却期）
+        // 分红 — 只记录待 swap 数量，不同步执行 swap（避免卖出失败）
         if (dividendBps > 0) {
             uint256 divAmt = taxAmt.mul(dividendBps).div(10000);
             if (divAmt > 0) {
                 pendingSwapForDividend = pendingSwapForDividend.add(divAmt);
-                if (isSell && block.number >= lastDividendBlock.add(dividendCooldown)) {
-                    _processDividendSwap();
-                    lastDividendBlock = block.number;
-                }
             }
         }
     }
@@ -439,6 +447,12 @@ contract ModaMintToken is IERC20, Ownable {
         tradingActive = active;
         if (active) emit TradingEnabled();
     }
+
+    /// @notice 设置分红 swap 阈值（累积达到此数量后自动 swap，0=永不自动）
+    function setDividendSwapThreshold(uint256 amount) external onlyOwner {
+        dividendSwapThreshold = amount;
+    }
+
     function addLiquidityManually() external onlyOwner {
         uint256 t = _balances[address(this)];
         uint256 b = address(this).balance;

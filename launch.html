@@ -407,7 +407,7 @@
   </style>
   <!-- ethers.js v5 本地文件 + 合约编译数据 -->
   <script src="ethers.umd.min.js"></script>
-  <script src="contract_data.js?v=20260525e"></script>
+  <script src="contract_data.js?v=20260525g"></script>
   <script>
     // 合约代码版本校验 — 检查 bytecode 长度确保是最新编译版本
     if(typeof CONTRACT_BYTECODE === 'string'){
@@ -869,6 +869,21 @@
             <span style="font-size:.8rem;color:var(--text-muted)">卖出税 (bps):</span>
             <input id="admin-sell-tax" type="number" min="0" max="2500" placeholder="500" style="width:90px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
             <button onclick="adminSetSellTax()" style="background:rgba(37,99,235,.3);color:#93c5fd;border:1px solid rgba(37,99,235,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置卖出税</button>
+          </div>
+        </div>
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
+        <!-- 分红设置 -->
+        <div style="margin-bottom:6px">
+          <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">📊 分红设置</div>
+          <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:6px">分红税费累积到合约，达到阈值后自动 swap 成分红代币并分配</div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <span style="font-size:.8rem;color:var(--text-muted)">分红阈值 (代币数量):</span>
+            <input id="admin-div-threshold" type="number" min="0" placeholder="100" style="width:110px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
+            <button onclick="adminSetDividendThreshold()" style="background:rgba(34,197,94,.3);color:#86efac;border:1px solid rgba(34,197,94,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置阈值</button>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+            <button onclick="adminProcessDividend()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">🔄 手动处理分红 (swap)</button>
+            <span id="admin-div-info" style="font-size:.75rem;color:var(--text-muted)"></span>
           </div>
         </div>
         <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
@@ -1983,7 +1998,8 @@ async function adminRefreshStatus() {
       presaleActive, tradingActive,
       mintCostBNB, fillAmountBNB, totalBNBCollected,
       tokensPerMint, bnbBalance,
-      owner, whitelistMintOnly
+      owner, whitelistMintOnly,
+      dividendSwapThreshold, pendingSwapForDividend
     ] = await Promise.all([
       _adminContract.presaleActive(),
       _adminContract.tradingActive(),
@@ -1993,7 +2009,9 @@ async function adminRefreshStatus() {
       _adminContract.tokensPerMint(),
       provider.getBalance(_adminContractAddr),
       _adminContract.owner(),
-      _adminContract.whitelistMintOnly()
+      _adminContract.whitelistMintOnly(),
+      _adminContract.dividendSwapThreshold(),
+      _adminContract.pendingSwapForDividend()
     ]);
     const fmt = v => parseFloat(ethers.utils.formatEther(v)).toFixed(4);
     const fmtTok = v => parseFloat(ethers.utils.formatUnits(v, 18)).toLocaleString();
@@ -2009,7 +2027,15 @@ async function adminRefreshStatus() {
       '<br/><b>已募集 BNB:</b> ' + fmt(totalBNBCollected) + ' / ' + fmt(fillAmountBNB) + ' BNB' +
       '<br/><b>单次 Mint 费用:</b> ' + fmt(mintCostBNB) + ' BNB' +
       '<br/><b>单次 Mint 代币:</b> ' + fmtTok(tokensPerMint) + ' tokens' +
-      '<br/><b>Mint 白名单模式:</b> ' + (whitelistMintOnly ? '<span style="color:#fbbf24">🔒 仅白名单可 Mint</span>' : '<span style="color:#4ade80">🔓 公开 Mint</span>');
+      '<br/><b>Mint 白名单模式:</b> ' + (whitelistMintOnly ? '<span style="color:#fbbf24">🔒 仅白名单可 Mint</span>' : '<span style="color:#4ade80">🔓 公开 Mint</span>') +
+      '<br/><b>分红阈值:</b> ' + fmtTok(dividendSwapThreshold) + ' 代币' +
+      '<br/><b>待处理分红:</b> ' + fmtTok(pendingSwapForDividend) + ' 代币';
+
+    // 更新分红信息显示
+    const divInfo = document.getElementById('admin-div-info');
+    if (divInfo) {
+      divInfo.textContent = '待处理: ' + fmtTok(pendingSwapForDividend) + ' / 阈值: ' + fmtTok(dividendSwapThreshold);
+    }
   } catch(e) {
     box.innerHTML = '<span style="color:#f87171">❌ 读取失败: ' + e.message + '</span>';
   }
@@ -2092,6 +2118,42 @@ async function adminSetSellTax() {
     const tx = await _adminContract.setSellTax(val);
     await tx.wait();
     adminLog('✅ 卖出税已设置为 ' + val + ' bps');
+    await adminRefreshStatus();
+  } catch(e) {
+    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
+  }
+}
+
+/* ===== 分红设置 ===== */
+
+async function adminSetDividendThreshold() {
+  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
+  const inp = document.getElementById('admin-div-threshold');
+  const val = ethers.utils.parseUnits(inp.value || '0', 18);
+  try {
+    adminLog('⏳ 设置分红阈值: ' + (inp.value || '0') + ' 代币...');
+    const tx = await _adminContract.setDividendSwapThreshold(val);
+    await tx.wait();
+    adminLog('✅ 分红阈值已设置为 ' + (inp.value || '0') + ' 代币');
+    await adminRefreshStatus();
+  } catch(e) {
+    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
+  }
+}
+
+async function adminProcessDividend() {
+  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
+  if (!confirm('确认手动触发分红 swap？这将消耗 gas')) return;
+  try {
+    adminLog('⏳ 提交 processDividend 交易...');
+    const tx = await _adminContract.processDividend();
+    adminLog('📤 TX: ' + tx.hash.slice(0,12) + '...');
+    const receipt = await tx.wait();
+    if (receipt.status === 1) {
+      adminLog('✅ 分红 swap 成功！');
+    } else {
+      adminLog('❌ 交易失败（revert）', true);
+    }
     await adminRefreshStatus();
   } catch(e) {
     adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
