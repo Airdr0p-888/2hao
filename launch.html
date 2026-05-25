@@ -872,12 +872,12 @@
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
             <span style="font-size:.8rem;color:var(--text-muted)">买入税 (bps):</span>
             <input id="admin-buy-tax" type="number" min="0" max="2500" placeholder="500" style="width:90px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
-            <button onclick="adminSetBuyTax()" style="background:rgba(37,99,235,.3);color:#93c5fd;border:1px solid rgba(37,99,235,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置买入税</button>
+            <button onclick="adminSetBuyTax()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,.35)">设置买入税</button>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <span style="font-size:.8rem;color:var(--text-muted)">卖出税 (bps):</span>
             <input id="admin-sell-tax" type="number" min="0" max="2500" placeholder="500" style="width:90px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
-            <button onclick="adminSetSellTax()" style="background:rgba(37,99,235,.3);color:#93c5fd;border:1px solid rgba(37,99,235,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置卖出税</button>
+            <button onclick="adminSetSellTax()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,.35)">设置卖出税</button>
           </div>
         </div>
         <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
@@ -888,7 +888,7 @@
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
             <span style="font-size:.8rem;color:var(--text-muted)">分红阈值 (代币数量):</span>
             <input id="admin-div-threshold" type="number" min="0" placeholder="100" style="width:110px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
-            <button onclick="adminSetDividendThreshold()" style="background:rgba(34,197,94,.3);color:#86efac;border:1px solid rgba(34,197,94,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置阈值</button>
+            <button onclick="adminSetDividendThreshold()" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(22,163,74,.35)">设置阈值</button>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
             <button onclick="adminProcessDividend()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">🔄 处理分红 (swap → USDT)</button>
@@ -910,13 +910,13 @@
           <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px">
             <textarea id="admin-whitelist-input" placeholder="输入地址，每行一个&#10;0x1111...aaaa&#10;0x2222...bbbb&#10;0x3333...cccc" rows="3" style="flex:1;min-width:260px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 12px;color:var(--text-body);font-size:.82rem;font-family:monospace;resize:vertical"></textarea>
             <div style="display:flex;flex-direction:column;gap:6px">
-              <button onclick="adminSetWhitelist(true)" style="background:rgba(34,197,94,.3);color:#86efac;border:1px solid rgba(34,197,94,.4);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">✅ 添加白名单</button>
-              <button onclick="adminSetWhitelist(false)" style="background:rgba(239,68,68,.3);color:#fca5a5;border:1px solid rgba(239,68,68,.4);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">❌ 移除白名单</button>
+              <button onclick="adminSetWhitelist(true)" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(22,163,74,.35)">✅ 添加白名单</button>
+              <button onclick="adminSetWhitelist(false)" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(220,38,38,.35)">❌ 移除白名单</button>
             </div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
             <input id="admin-wl-check-addr" type="text" placeholder="查询地址 0x..." style="flex:1;min-width:220px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 10px;color:var(--text-body);font-size:.8rem;font-family:monospace"/>
-            <button onclick="adminCheckWhitelist()" style="background:rgba(59,130,246,.3);color:#93c5fd;border:1px solid rgba(59,130,246,.4);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem">🔍 查询</button>
+            <button onclick="adminCheckWhitelist()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,.35)">🔍 查询</button>
             <span id="wl-check-result" style="font-size:.78rem;color:var(--text-muted)"></span>
           </div>
         </div>
