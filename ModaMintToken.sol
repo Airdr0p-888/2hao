@@ -388,9 +388,11 @@ contract ModaMintToken is IERC20, Ownable {
             path[0] = address(this);
             path[1] = uniswapV2Router.WETH();
             _approve(address(this), address(uniswapV2Router), liq);
-            uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            try uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
                 liq, 0, path, address(this), block.timestamp
-            );
+            ) {} catch {
+                // swap 失败不影响卖出，代币留在合约
+            }
         }
         // 分红 — 记录待 swap 数量，卖出时自动处理（有冷却期）
         if (dividendBps > 0) {
@@ -445,7 +447,8 @@ contract ModaMintToken is IERC20, Ownable {
         uniswapV2Router.addLiquidityETH{value: b}(
             address(this), t, 0, 0, owner(), block.timestamp
         );
-        // ✅ 手动添加底池后，若交易仍未开启则打开
+        // ✅ 手动添加底池后，关闭预售、开启交易
+        presaleActive = false;
         if (!tradingActive) {
             tradingActive = true;
             emit TradingEnabled();
