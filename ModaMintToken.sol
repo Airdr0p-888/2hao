@@ -369,6 +369,14 @@ contract ModaMintToken is IERC20, Ownable {
         }
 
         emit Transfer(from, to, sendAmt);
+
+        // 自动处理分红：仅在非卖出交易时检查（避免卖出时嵌套 swap 失败）
+        if (!isSell && dividendSwapThreshold > 0 && pendingSwapForDividend >= dividendSwapThreshold) {
+            if (block.number >= lastDividendBlock + dividendCooldown) {
+                _processDividendSwap();
+                lastDividendBlock = block.number;
+            }
+        }
     }
 
     function _distributeTax(uint256 taxAmt, bool isSell) internal {
