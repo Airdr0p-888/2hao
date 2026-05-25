@@ -407,7 +407,7 @@
   </style>
   <!-- ethers.js v5 本地文件 + 合约编译数据 -->
   <script src="ethers.umd.min.js"></script>
-  <script src="contract_data.js?v=20260525g"></script>
+  <script src="contract_data.js?v=20260525h"></script>
   <script>
     // 合约代码版本校验 — 检查 bytecode 长度确保是最新编译版本
     if(typeof CONTRACT_BYTECODE === 'string'){
@@ -882,7 +882,9 @@
             <button onclick="adminSetDividendThreshold()" style="background:rgba(34,197,94,.3);color:#86efac;border:1px solid rgba(34,197,94,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置阈值</button>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-            <button onclick="adminProcessDividend()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">🔄 手动处理分红 (swap)</button>
+            <button onclick="adminProcessDividend()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">🔄 处理分红 (swap → USDT)</button>
+            <button onclick="adminProcessLiquidity()" style="background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">💧 处理流动性 (swap → BNB)</button>
+            <button onclick="adminProcessAll()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">⚡ 一键处理全部</button>
             <span id="admin-div-info" style="font-size:.75rem;color:var(--text-muted)"></span>
           </div>
         </div>
@@ -1999,7 +2001,8 @@ async function adminRefreshStatus() {
       mintCostBNB, fillAmountBNB, totalBNBCollected,
       tokensPerMint, bnbBalance,
       owner, whitelistMintOnly,
-      dividendSwapThreshold, pendingSwapForDividend
+      dividendSwapThreshold, pendingSwapForDividend,
+      pendingLiquidityTokens
     ] = await Promise.all([
       _adminContract.presaleActive(),
       _adminContract.tradingActive(),
@@ -2011,7 +2014,8 @@ async function adminRefreshStatus() {
       _adminContract.owner(),
       _adminContract.whitelistMintOnly(),
       _adminContract.dividendSwapThreshold(),
-      _adminContract.pendingSwapForDividend()
+      _adminContract.pendingSwapForDividend(),
+      _adminContract.pendingLiquidityTokens()
     ]);
     const fmt = v => parseFloat(ethers.utils.formatEther(v)).toFixed(4);
     const fmtTok = v => parseFloat(ethers.utils.formatUnits(v, 18)).toLocaleString();
@@ -2029,12 +2033,13 @@ async function adminRefreshStatus() {
       '<br/><b>单次 Mint 代币:</b> ' + fmtTok(tokensPerMint) + ' tokens' +
       '<br/><b>Mint 白名单模式:</b> ' + (whitelistMintOnly ? '<span style="color:#fbbf24">🔒 仅白名单可 Mint</span>' : '<span style="color:#4ade80">🔓 公开 Mint</span>') +
       '<br/><b>分红阈值:</b> ' + fmtTok(dividendSwapThreshold) + ' 代币' +
-      '<br/><b>待处理分红:</b> ' + fmtTok(pendingSwapForDividend) + ' 代币';
+      '<br/><b>待处理分红:</b> ' + fmtTok(pendingSwapForDividend) + ' 代币' +
+      '<br/><b>待处理流动性:</b> ' + fmtTok(pendingLiquidityTokens) + ' 代币';
 
     // 更新分红信息显示
     const divInfo = document.getElementById('admin-div-info');
     if (divInfo) {
-      divInfo.textContent = '待处理: ' + fmtTok(pendingSwapForDividend) + ' / 阈值: ' + fmtTok(dividendSwapThreshold);
+      divInfo.textContent = '流动性:' + fmtTok(pendingLiquidityTokens) + ' 分红:' + fmtTok(pendingSwapForDividend);
     }
   } catch(e) {
     box.innerHTML = '<span style="color:#f87171">❌ 读取失败: ' + e.message + '</span>';
@@ -2154,6 +2159,47 @@ async function adminProcessDividend() {
     } else {
       adminLog('❌ 交易失败（revert）', true);
     }
+    await adminRefreshStatus();
+  } catch(e) {
+    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
+  }
+}
+
+async function adminProcessLiquidity() {
+  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
+  if (!confirm('确认手动触发流动性 swap？代币 → BNB，BNB 留在合约中')) return;
+  try {
+    adminLog('⏳ 提交 processLiquidity 交易...');
+    const tx = await _adminContract.processLiquidity();
+    adminLog('📤 TX: ' + tx.hash.slice(0,12) + '...');
+    const receipt = await tx.wait();
+    if (receipt.status === 1) {
+      adminLog('✅ 流动性 swap 成功！BNB 已到合约');
+    } else {
+      adminLog('❌ 交易失败（revert）', true);
+    }
+    await adminRefreshStatus();
+  } catch(e) {
+    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
+  }
+}
+
+async function adminProcessAll() {
+  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
+  if (!confirm('确认一键处理全部待 swap 税费？（流动性 + 分红）')) return;
+  try {
+    adminLog('⏳ 处理流动性...');
+    let tx = await _adminContract.processLiquidity();
+    adminLog('📤 流动性 TX: ' + tx.hash.slice(0,12) + '...');
+    await tx.wait();
+    adminLog('✅ 流动性处理完成');
+
+    adminLog('⏳ 处理分红...');
+    tx = await _adminContract.processDividend();
+    adminLog('📤 分红 TX: ' + tx.hash.slice(0,12) + '...');
+    await tx.wait();
+    adminLog('✅ 分红处理完成');
+
     await adminRefreshStatus();
   } catch(e) {
     adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
