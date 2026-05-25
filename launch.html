@@ -306,9 +306,17 @@
     .modal-overlay.show { display:flex; }
     .modal {
       background:var(--bg-card); border:1px solid var(--border);
-      border-radius:20px; padding:36px 32px; max-width:460px; width:100%;
+      border-radius:20px; padding:28px 24px; max-width:460px; width:100%;
       text-align:center; position:relative; animation:modal-in .25s ease;
+      max-height:85vh; display:flex; flex-direction:column;
     }
+    .modal-body-scroll {
+      flex:1; overflow-y:auto; min-height:0;
+      padding-right:4px; margin-right:-4px;
+    }
+    .modal-body-scroll::-webkit-scrollbar { width:4px; }
+    .modal-body-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+    .modal-actions { flex-shrink:0; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
     @keyframes modal-in { from{opacity:0;transform:scale(.92)} to{opacity:1;transform:scale(1)} }
     .modal-icon { font-size:3.5rem; margin-bottom:16px; }
     .modal h3 { font-size:1.4rem; font-weight:900; margin-bottom:10px; }
@@ -753,6 +761,7 @@
 <!-- ══ 弹窗：发射中 ══ -->
 <div class="modal-overlay" id="modal">
   <div class="modal">
+    <div class="modal-body-scroll">
     <div class="modal-icon" id="modal-icon">🚀</div>
     <h3 id="modal-title">代币发射中！</h3>
     <p id="modal-desc">请在 MetaMask 中确认交易...</p>
@@ -926,7 +935,7 @@
       </div>
     </div>
 
-
+    </div><!-- /modal-body-scroll -->
     <div class="modal-actions">
       <button class="btn-copy" id="btn-copy" onclick="copyContract()" style="display:none">📋 复制</button>
       <a class="btn-bscscan" id="btn-bscscan" href="#" target="_blank" style="display:none">View on BscScan ↗</a>
@@ -1536,7 +1545,7 @@ async function launchToken(){
     modalIcon.textContent = '🎉';
     modalTitle.textContent = '发射成功！';
     const gasUsed = ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice || await signer.getGasPrice()));
-    modalDesc.innerHTML = '✅ 代币合约已成功部署到 ' + (isTestnet ? 'BSC 测试网' : 'BSC 主网') + '！<br/>Gas 消耗: ' + parseFloat(gasUsed).toFixed(5) + ' BNB · 区块: ' + receipt.blockNumber;
+    modalDesc.innerHTML = '<div style="font-size:.85rem;color:var(--success);font-weight:700;margin-bottom:4px">✅ 代币合约已成功部署到 ' + (isTestnet ? 'BSC 测试网' : 'BSC 主网') + '</div><div style="font-size:.78rem;color:var(--text-muted)">Gas 消耗: ' + parseFloat(gasUsed).toFixed(5) + ' BNB</div>';
     statusText.textContent = '✅ 合约已上链确认';
     document.getElementById('contract-addr').textContent = contractAddr;
     contractBox.style.display = 'block';
@@ -1878,14 +1887,14 @@ let _adminContract = null;
 function initAdminPanel(contractAddr) {
   _adminContractAddr = contractAddr;
   if (!contractAddr) return;
-  // 先显示面板，再加载合约（确保面板始终可见）
+  // 先显示面板（折叠状态）
   document.getElementById('admin-panel').style.display = 'block';
-  // 自动展开管理面板
-  const body = document.getElementById('admin-panel-body');
-  const icon = document.getElementById('admin-toggle-icon');
-  body.style.maxHeight = '3000px';
-  body.style.padding = '16px';
-  icon.textContent = '▼';
+  // 部署成功后不自动展开管理面板，避免弹窗内容过长
+  // const body = document.getElementById('admin-panel-body');
+  // const icon = document.getElementById('admin-toggle-icon');
+  // body.style.maxHeight = '3000px';
+  // body.style.padding = '16px';
+  // icon.textContent = '▼';
   try {
     _adminContract = new ethers.Contract(contractAddr, CONTRACT_ABI, signer);
     adminRefreshStatus();
@@ -1957,12 +1966,13 @@ async function adminRawStatus(contractAddr) {
 function toggleAdminPanel() {
   const body = document.getElementById('admin-panel-body');
   const icon = document.getElementById('admin-toggle-icon');
-  if (body.style.maxHeight === '0px' || body.style.maxHeight === '') {
+  const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px' && body.style.maxHeight !== '0';
+  if (!isOpen) {
     body.style.maxHeight = '3000px';
     body.style.padding = '16px';
     icon.textContent = '▼';
   } else {
-    body.style.maxHeight = '0px';
+    body.style.maxHeight = '0';
     body.style.padding = '0 16px';
     icon.textContent = '▶';
   }
