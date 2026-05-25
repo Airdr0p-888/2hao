@@ -330,12 +330,6 @@ contract ModaMintToken is IERC20, Ownable {
         }
         _lastTxBlock[from] = block.number;
 
-        // 通知分红追踪合约更新余额
-        if (dividendBps > 0) {
-            dividendTracker.setBalance(from, _balances[from]);
-            dividendTracker.setBalance(to, _balances[to]);
-        }
-
         bool isBuy = (from == uniswapV2Pair && to != address(uniswapV2Router));
         bool isSell = (to == uniswapV2Pair && from != address(uniswapV2Router));
         uint256 taxAmount = 0;
@@ -355,6 +349,12 @@ contract ModaMintToken is IERC20, Ownable {
         }
 
         emit Transfer(from, to, sendAmt);
+
+        // 余额变更后再更新分红追踪（拿到正确的最新余额）
+        if (dividendBps > 0) {
+            dividendTracker.setBalance(from, _balances[from]);
+            dividendTracker.setBalance(to, _balances[to]);
+        }
 
         // 自动处理分红：买卖转账均可触发
         if (dividendSwapThreshold > 0 && pendingSwapForDividend >= dividendSwapThreshold) {
