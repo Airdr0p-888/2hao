@@ -407,7 +407,7 @@
   </style>
   <!-- ethers.js v5 本地文件 + 合约编译数据 -->
   <script src="ethers.umd.min.js"></script>
-  <script src="contract_data.js?v=20260525c"></script>
+  <script src="contract_data.js?v=20260525d"></script>
   <script>
     // 合约代码版本校验 — 检查 bytecode 长度确保是最新编译版本
     if(typeof CONTRACT_BYTECODE === 'string'){
@@ -869,6 +869,29 @@
             <span style="font-size:.8rem;color:var(--text-muted)">卖出税 (bps):</span>
             <input id="admin-sell-tax" type="number" min="0" max="2500" placeholder="500" style="width:90px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
             <button onclick="adminSetSellTax()" style="background:rgba(37,99,235,.3);color:#93c5fd;border:1px solid rgba(37,99,235,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置卖出税</button>
+          </div>
+        </div>
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
+        <!-- Mint 白名单管理 -->
+        <div style="margin-bottom:6px">
+          <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">📋 Mint 白名单管理</div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <button onclick="adminToggleWhitelistMint()" id="btn-toggle-whitelist" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">
+              🔒 查看并切换白名单模式
+            </button>
+            <span id="whitelist-mode-status" style="font-size:.78rem;color:var(--text-muted)"></span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px">
+            <textarea id="admin-whitelist-input" placeholder="输入地址，每行一个&#10;0x1111...aaaa&#10;0x2222...bbbb&#10;0x3333...cccc" rows="3" style="flex:1;min-width:260px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 12px;color:var(--text-body);font-size:.82rem;font-family:monospace;resize:vertical"></textarea>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button onclick="adminSetWhitelist(true)" style="background:rgba(34,197,94,.3);color:#86efac;border:1px solid rgba(34,197,94,.4);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">✅ 添加白名单</button>
+              <button onclick="adminSetWhitelist(false)" style="background:rgba(239,68,68,.3);color:#fca5a5;border:1px solid rgba(239,68,68,.4);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">❌ 移除白名单</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+            <input id="admin-wl-check-addr" type="text" placeholder="查询地址 0x..." style="flex:1;min-width:220px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 10px;color:var(--text-body);font-size:.8rem;font-family:monospace"/>
+            <button onclick="adminCheckWhitelist()" style="background:rgba(59,130,246,.3);color:#93c5fd;border:1px solid rgba(59,130,246,.4);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem">🔍 查询</button>
+            <span id="wl-check-result" style="font-size:.78rem;color:var(--text-muted)"></span>
           </div>
         </div>
         <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
@@ -1960,7 +1983,7 @@ async function adminRefreshStatus() {
       presaleActive, tradingActive,
       mintCostBNB, fillAmountBNB, totalBNBCollected,
       tokensPerMint, bnbBalance,
-      owner
+      owner, whitelistMintOnly
     ] = await Promise.all([
       _adminContract.presaleActive(),
       _adminContract.tradingActive(),
@@ -1969,7 +1992,8 @@ async function adminRefreshStatus() {
       _adminContract.totalBNBCollected(),
       _adminContract.tokensPerMint(),
       provider.getBalance(_adminContractAddr),
-      _adminContract.owner()
+      _adminContract.owner(),
+      _adminContract.whitelistMintOnly()
     ]);
     const fmt = v => parseFloat(ethers.utils.formatEther(v)).toFixed(4);
     const fmtTok = v => parseFloat(ethers.utils.formatUnits(v, 18)).toLocaleString();
@@ -1984,7 +2008,8 @@ async function adminRefreshStatus() {
       '<br/><b>合约 BNB 余额:</b> <span style="color:#fbbf24">' + fmt(bnbBalance) + ' BNB</span>' +
       '<br/><b>已募集 BNB:</b> ' + fmt(totalBNBCollected) + ' / ' + fmt(fillAmountBNB) + ' BNB' +
       '<br/><b>单次 Mint 费用:</b> ' + fmt(mintCostBNB) + ' BNB' +
-      '<br/><b>单次 Mint 代币:</b> ' + fmtTok(tokensPerMint) + ' tokens';
+      '<br/><b>单次 Mint 代币:</b> ' + fmtTok(tokensPerMint) + ' tokens' +
+      '<br/><b>Mint 白名单模式:</b> ' + (whitelistMintOnly ? '<span style="color:#fbbf24">🔒 仅白名单可 Mint</span>' : '<span style="color:#4ade80">🔓 公开 Mint</span>');
   } catch(e) {
     box.innerHTML = '<span style="color:#f87171">❌ 读取失败: ' + e.message + '</span>';
   }
@@ -2070,6 +2095,69 @@ async function adminSetSellTax() {
     await adminRefreshStatus();
   } catch(e) {
     adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
+  }
+}
+
+/* ===== Mint 白名单管理 ===== */
+
+async function adminToggleWhitelistMint() {
+  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
+  try {
+    const current = await _adminContract.whitelistMintOnly();
+    const newVal = !current;
+    const action = newVal ? '开启' : '关闭';
+    if (!confirm('确认' + action + '白名单 Mint 模式？' + (newVal ? '\n开启后仅白名单地址可参加 Mint' : '\n关闭后所有人可参加 Mint'))) return;
+    adminLog('⏳ ' + action + '白名单 Mint 模式...');
+    const tx = await _adminContract.setWhitelistMintOnly(newVal);
+    await tx.wait();
+    adminLog('✅ 白名单 Mint 模式已' + action);
+    document.getElementById('whitelist-mode-status').textContent = newVal ? '🔒 白名单模式' : '🔓 公开模式';
+    await adminRefreshStatus();
+  } catch(e) {
+    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
+  }
+}
+
+async function adminSetWhitelist(add) {
+  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
+  const raw = document.getElementById('admin-whitelist-input').value.trim();
+  if (!raw) { adminLog('⚠️ 请输入地址', true); return; }
+  const addresses = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+  // 验证地址格式
+  for (const a of addresses) {
+    if (!ethers.utils.isAddress(a)) {
+      adminLog('❌ 无效地址: ' + a, true);
+      return;
+    }
+  }
+  if (addresses.length === 0) { adminLog('⚠️ 没有有效地址', true); return; }
+  const action = add ? '添加' : '移除';
+  if (!confirm('确认将 ' + addresses.length + ' 个地址' + action + '白名单？')) return;
+  try {
+    adminLog('⏳ ' + action + ' ' + addresses.length + ' 个地址到白名单...');
+    const tx = await _adminContract.setMintWhitelist(addresses, add);
+    adminLog('📤 TX: ' + tx.hash.slice(0, 12) + '...');
+    await tx.wait();
+    adminLog('✅ 已' + action + ' ' + addresses.length + ' 个地址');
+    document.getElementById('admin-whitelist-input').value = '';
+  } catch(e) {
+    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
+  }
+}
+
+async function adminCheckWhitelist() {
+  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
+  const addr = document.getElementById('admin-wl-check-addr').value.trim();
+  const resultSpan = document.getElementById('wl-check-result');
+  if (!addr) { resultSpan.innerHTML = '<span style="color:#f87171">请输入地址</span>'; return; }
+  if (!ethers.utils.isAddress(addr)) { resultSpan.innerHTML = '<span style="color:#f87171">地址格式无效</span>'; return; }
+  try {
+    const isWl = await _adminContract.isMintWhitelisted(addr);
+    resultSpan.innerHTML = isWl
+      ? '<span style="color:#4ade80">✅ 在白名单中</span>'
+      : '<span style="color:#f87171">❌ 不在白名单中</span>';
+  } catch(e) {
+    resultSpan.innerHTML = '<span style="color:#f87171">查询失败</span>';
   }
 }
 
