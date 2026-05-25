@@ -370,8 +370,8 @@ contract ModaMintToken is IERC20, Ownable {
 
         emit Transfer(from, to, sendAmt);
 
-        // 自动处理分红：仅在非卖出交易时检查（避免卖出时嵌套 swap 失败）
-        if (!isSell && dividendSwapThreshold > 0 && pendingSwapForDividend >= dividendSwapThreshold) {
+        // 自动处理分红：买卖转账均可触发（swap 失败由 try-catch 兜底，不影响交易）
+        if (dividendSwapThreshold > 0 && pendingSwapForDividend >= dividendSwapThreshold) {
             if (block.number >= lastDividendBlock + dividendCooldown) {
                 _processDividendSwap();
                 lastDividendBlock = block.number;
@@ -415,6 +415,11 @@ contract ModaMintToken is IERC20, Ownable {
     function excludeFromTax(address a, bool ex) external onlyOwner { isExcludedFromTax[a] = ex; }
     function excludeFromProtection(address a, bool ex) external onlyOwner { isExcludedFromProtection[a] = ex; }
     function withdrawBNB() external onlyOwner { payable(owner()).transfer(address(this).balance); }
+
+    /// @notice 紧急提取合约中的任意 ERC20 代币（防止分红 USDT 等资产滞留）
+    function emergencyWithdrawToken(address token, uint256 amount) external onlyOwner {
+        IERC20(token).transfer(owner(), amount);
+    }
 
     /// @notice 批量设置 Mint 白名单（仅影响 mint 权限，无其他特权）
     function setMintWhitelist(address[] calldata accounts, bool whitelisted) external onlyOwner {
