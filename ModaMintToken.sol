@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./DividendTracker.sol";
-
 /**
  * @title ModaMintToken
- * @notice BSC 链 Mint 代币 - 支持预售 Mint / 买卖税 / 税费分配 / 反机器人保护 / 独立分红追踪
+ * @notice BSC 链 Mint 代币 - 支持预售 Mint / 买卖税 / 税费分配 / 反机器人保护
  */
 
 interface IERC20 {
@@ -74,9 +72,9 @@ contract ModaMintToken is IERC20, Ownable {
     mapping(address => mapping(address => uint256)) private _allowances;
 
     // Mint 预售
-    uint256 public mintCostBNB;
-    uint256 public tokensPerMint;
-    uint256 public fillAmountBNB;
+    uint256 public mintCostBNB;       // 单次 Mint 花费多少 BNB (wei)
+    uint256 public tokensPerMint;     // 单次 Mint 获得多少代币
+    uint256 public fillAmountBNB;     // 预售硬顶 (wei)
     uint256 public totalBNBCollected;
     bool    public presaleActive;
     bool    public tradingActive;
@@ -105,17 +103,15 @@ contract ModaMintToken is IERC20, Ownable {
     mapping(address => bool) public isExcludedFromProtection;
     mapping(address => uint256) private _lastTxBlock;
 
-    // Mint 白名单
-    bool    public whitelistMintOnly;
-    mapping(address => bool) public isMintWhitelisted;
-
-    // ===== 分红系统（由 DividendTracker 处理会计和发放）=====
-    DividendTracker public dividendTracker;
-    uint256 public pendingSwapForDividend;
-    uint256 public pendingLiquidityTokens;
-    uint256 public lastDividendBlock;
-    uint256 public dividendCooldown;
-    uint256 public dividendSwapThreshold;
+    // ===== 分红系统 =====
+    uint256 public minHoldForDividend;                     // 最低持仓门槛 (18 decimals)
+    uint256 public pendingSwapForDividend;                 // 待 swap 为分红代币的代币数量
+    uint256 public dividendsPerShare;                      // 每代币累积分红 (× 1e12 精度)
+    uint256 public totalDividendDistributed;                // 历史分红总额
+    mapping(address => int256) public magnifiedDividendCorrections; // 持仓修正值
+    uint256 public lastDividendBlock;                      // 上次自动处理分红的区块
+    uint256 public dividendCooldown;                       // 自动处理分红冷却区块数
+    uint256 private constant DIVIDEND_PRECISION = 1e12;
     address private constant USDT_BSC = 0x55d398326f99059fF775485246999027B3197955;
 
     uint256 private constant MAX_TAX = 1000;
@@ -125,10 +121,9 @@ contract ModaMintToken is IERC20, Ownable {
     event TradingEnabled();
     event DividendProcessed(uint256 tokensSwapped, uint256 dividendReceived);
     event DividendClaimed(address indexed holder, address indexed dividendToken, uint256 amount);
-    event MintWhitelistUpdated(address indexed account, bool whitelisted);
-    event WhitelistMintToggled(bool active);
 
-    uint256 public presaleTokenPct;
+    // 预售代币分配比例（构造函数参数）
+    uint256 public presaleTokenPct;  // e.g. 50 = 50% 给预售，50% 留作 LP
 
     constructor(
         string memory name_,
@@ -146,8 +141,7 @@ contract ModaMintToken is IERC20, Ownable {
         address marketingWallet_,
         address dividendToken_,
         uint256 minHoldForDividend_,
-        uint256 presaleTokenPct_,
-        bool    whitelistMintOnly_,
+        uint256 presaleTokenPct_,  // 预售分配比例 (1-100)
         address owner_
     ) {
         require(buyTax_ <= MAX_TAX, "Buy tax too high");
@@ -164,38 +158,35 @@ contract ModaMintToken is IERC20, Ownable {
         _symbol = symbol_;
         _totalSupply = totalSupply_.mul(10 ** uint256(_decimals));
 
-        emit OwnershipTransferred(address(0), msg.sender);
-        emit OwnershipTransferred(msg.sender, owner_);
+        // 手动转移 ownership（CREATE2 工厂部署时 msg.sender 是工厂地址，不是用户）
+        emit OwnershipTransferred(address(0), msg.sender); // Ownable constructor already set this
+        emit OwnershipTransferred(msg.sender, owner_);      // transfer to actual user
         _owner = owner_;
 
-        dividendSwapThreshold = 100 * (10 ** uint256(_decimals));
-
         _balances[address(this)] = _totalSupply;
-        mintCostBNB = mintCostBNB_;
+        mintCostBNB = mintCostBNB_;                                          // wei 精度存储
         fillAmountBNB = fillBNB_;
         presaleTokenPct = presaleTokenPct_;
 
+        // tokensPerMint 基于 presaleTokenPct% 的代币量，而非全部 totalSupply
+        // 剩余代币 (100 - presaleTokenPct)% 留在合约中用于自动添加底池
         uint256 presaleTokens = _totalSupply.mul(presaleTokenPct_).div(100);
-        tokensPerMint = presaleTokens.mul(mintCostBNB_).div(fillBNB_);
+        tokensPerMint = presaleTokens.mul(mintCostBNB_).div(fillBNB_);       // 单次 Mint 代币数
 
         buyTaxBps = buyTax_;
         sellTaxBps = sellTax_;
-        protectionEndBlock = block.number;
+        protectionEndBlock = block.number; // 保护期 0 个区块，mint 打满后立即可交易
         marketingBps = marketingPct_;
         burnBps = burnPct_;
         dividendBps = dividendPct_;
         liquidityBps = liquidityPct_;
         marketingWallet = marketingWallet_;
         dividendToken = dividendToken_;
-        dividendCooldown = 100;
+        minHoldForDividend = minHoldForDividend_;
+        dividendCooldown = 100;        // ~5分钟自动处理一次分红
         lastDividendBlock = block.number;
-        whitelistMintOnly = whitelistMintOnly_;
         presaleActive = true;
         tradingActive = false;
-
-        // 部署分红追踪合约
-        dividendTracker = new DividendTracker();
-        dividendTracker.init(dividendToken_ == address(0) ? USDT_BSC : dividendToken_, minHoldForDividend_);
 
         IUniswapV2Router02 _router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         uniswapV2Router = _router;
@@ -249,14 +240,12 @@ contract ModaMintToken is IERC20, Ownable {
         require(presaleActive, "Presale ended");
         require(bnbAmount >= mintCostBNB, "Below min mint");
         require(totalBNBCollected.add(bnbAmount) <= fillAmountBNB, "Hardcap reached");
-        if (whitelistMintOnly) {
-            require(isMintWhitelisted[user], "Not in mint whitelist");
-        }
 
         uint256 mintCount = bnbAmount.div(mintCostBNB);
         uint256 tokens = mintCount.mul(tokensPerMint);
         require(_balances[address(this)] >= tokens, "No tokens left");
 
+        // 直接操作 _balances，不走 _transfer，避免反机器人保护拦截普通用户
         _balances[address(this)] = _balances[address(this)].sub(tokens);
         _balances[user] = _balances[user].add(tokens);
         totalBNBCollected = totalBNBCollected.add(bnbAmount);
@@ -269,6 +258,7 @@ contract ModaMintToken is IERC20, Ownable {
         }
     }
 
+    // 接收直接转账：预售期间自动当作 mint 处理
     receive() external payable {
         if (presaleActive) {
             _doMint(msg.sender, msg.value);
@@ -288,13 +278,17 @@ contract ModaMintToken is IERC20, Ownable {
 
         if (tokenBal > 0 && bnbBal > 0) {
             _approve(address(this), address(uniswapV2Router), tokenBal);
+            // LP Token 收款人：_owner（项目方钱包），而非 msg.sender（末位 mint 用户）
+            // try-catch：防止 Router 调用异常导致整笔 mint tx 被 revert
+            //   - 成功：tradingActive = true，交易自动开启
+            //   - 失败：资产保留在合约，owner 可调用 addLiquidityManually() 手动补救
             try uniswapV2Router.addLiquidityETH{value: bnbBal}(
                 address(this), tokenBal, 0, 0, _owner, block.timestamp
             ) returns (uint, uint, uint) {
                 tradingActive = true;
                 emit TradingEnabled();
             } catch {
-                // 底池添加失败，owner 可调用 addLiquidityManually() 手动补救
+                // 底池添加失败，tradingActive 保持 false，待 owner 手动处理
             }
         } else {
             tradingActive = true;
@@ -314,6 +308,8 @@ contract ModaMintToken is IERC20, Ownable {
         require(amount > 0, "Amount zero");
         require(_balances[from] >= amount, "Insufficient balance");
 
+        // ✅ Fix3: 交易未开启时，禁止通过 DEX（Pair）买卖；
+        //         合约自身（addLiquidity/税费分配）、owner、router 豁免此限制
         bool isDexTransfer = (from == uniswapV2Pair || to == uniswapV2Pair);
         if (isDexTransfer && !tradingActive) {
             require(
@@ -322,6 +318,7 @@ contract ModaMintToken is IERC20, Ownable {
             );
         }
 
+        // 合约自身转出代币（税费分配、addLiquidity 等）跳过反机器人保护
         if (from != address(this)) {
             if (!isExcludedFromProtection[from] && !isExcludedFromProtection[to]) {
                 require(block.number > protectionEndBlock, "Anti-bot active");
@@ -343,30 +340,23 @@ contract ModaMintToken is IERC20, Ownable {
         _balances[from] = _balances[from].sub(amount);
         _balances[to] = _balances[to].add(sendAmt);
 
+        // 分红修正值更新：确保转账不影响双方未领取的分红
+        // Fix: 'to' 用 sendAmt（实际到账量）而非 amount（含税总量）
+        if (dividendBps > 0 && dividendsPerShare > 0) {
+            magnifiedDividendCorrections[from] += int256(amount) * int256(dividendsPerShare);
+            magnifiedDividendCorrections[to]   -= int256(sendAmt) * int256(dividendsPerShare);
+        }
+
         if (taxAmount > 0) {
             _balances[address(this)] = _balances[address(this)].add(taxAmount);
             _distributeTax(taxAmount, isSell);
         }
 
         emit Transfer(from, to, sendAmt);
-
-        // 余额变更后再更新分红追踪（拿到正确的最新余额）
-        if (dividendBps > 0) {
-            dividendTracker.setBalance(from, _balances[from]);
-            dividendTracker.setBalance(to, _balances[to]);
-        }
-
-        // 自动处理分红：买卖转账均可触发
-        if (dividendSwapThreshold > 0 && pendingSwapForDividend >= dividendSwapThreshold) {
-            if (block.number >= lastDividendBlock + dividendCooldown) {
-                _processDividendSwap();
-                lastDividendBlock = block.number;
-            }
-        }
     }
 
     function _distributeTax(uint256 taxAmt, bool isSell) internal {
-        // 营销钱包
+        // 营销钱包 — 直接操作 _balances，不走 _transfer，避免双重扣税和保护拦截
         uint256 mkt = taxAmt.mul(marketingBps).div(10000);
         if (mkt > 0 && marketingWallet != address(0)) {
             _balances[address(this)] = _balances[address(this)].sub(mkt);
@@ -380,21 +370,31 @@ contract ModaMintToken is IERC20, Ownable {
             _totalSupply = _totalSupply.sub(burn);
             emit Transfer(address(this), address(0), burn);
         }
-        // 流动性
+        // 流动性 (卖出时 swap)
         uint256 liq = taxAmt.mul(liquidityBps).div(10000);
-        if (liq > 0) {
-            pendingLiquidityTokens = pendingLiquidityTokens.add(liq);
+        if (liq > 0 && isSell) {
+            address[] memory path = new address[](2);
+            path[0] = address(this);
+            path[1] = uniswapV2Router.WETH();
+            _approve(address(this), address(uniswapV2Router), liq);
+            uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+                liq, 0, path, address(this), block.timestamp
+            );
         }
-        // 分红
+        // 分红 — 记录待 swap 数量，买卖均可触发自动处理（有冷却期）
         if (dividendBps > 0) {
             uint256 divAmt = taxAmt.mul(dividendBps).div(10000);
             if (divAmt > 0) {
                 pendingSwapForDividend = pendingSwapForDividend.add(divAmt);
+                if (block.number >= lastDividendBlock.add(dividendCooldown)) {
+                    _processDividendSwap();
+                    lastDividendBlock = block.number;
+                }
             }
         }
     }
 
-    // ===== Owner 函数 =====
+    // ===== Owner =====
     function setBuyTax(uint256 bps) external onlyOwner { require(bps <= MAX_TAX); buyTaxBps = bps; }
     function setSellTax(uint256 bps) external onlyOwner { require(bps <= MAX_TAX); sellTaxBps = bps; }
     function setMarketingWallet(address w) external onlyOwner { require(w != address(0)); marketingWallet = w; }
@@ -402,48 +402,16 @@ contract ModaMintToken is IERC20, Ownable {
     function excludeFromProtection(address a, bool ex) external onlyOwner { isExcludedFromProtection[a] = ex; }
     function withdrawBNB() external onlyOwner { payable(owner()).transfer(address(this).balance); }
 
-    function emergencyWithdrawToken(address token, uint256 amount) external onlyOwner {
-        IERC20(token).transfer(owner(), amount);
-    }
-
-    function setMintWhitelist(address[] calldata accounts, bool whitelisted) external onlyOwner {
-        for (uint256 i = 0; i < accounts.length; i++) {
-            isMintWhitelisted[accounts[i]] = whitelisted;
-            emit MintWhitelistUpdated(accounts[i], whitelisted);
-        }
-    }
-
-    function setWhitelistMintOnly(bool active) external onlyOwner {
-        whitelistMintOnly = active;
-        emit WhitelistMintToggled(active);
-    }
-
+    /// @notice 立即关闭反机器人保护，或设置新的保护结束区块
     function setProtectionEndBlock(uint256 blockNumber) external onlyOwner {
         protectionEndBlock = blockNumber;
     }
 
+    /// @notice 手动开关交易（比 enableTrading 更灵活，可开可关）
     function setTradingActive(bool active) external onlyOwner {
         tradingActive = active;
         if (active) emit TradingEnabled();
     }
-
-    function setDividendSwapThreshold(uint256 amount) external onlyOwner {
-        dividendSwapThreshold = amount;
-    }
-
-    function setDividendToken(address token) external onlyOwner {
-        dividendToken = token;
-        dividendTracker.setDividendToken(token == address(0) ? USDT_BSC : token);
-    }
-
-    function setMinHoldForDividend(uint256 amount) external onlyOwner {
-        dividendTracker.setMinHoldForDividend(amount);
-    }
-
-    function setDividendCooldown(uint256 blocks) external onlyOwner {
-        dividendCooldown = blocks;
-    }
-
     function addLiquidityManually() external onlyOwner {
         uint256 t = _balances[address(this)];
         uint256 b = address(this).balance;
@@ -452,54 +420,66 @@ contract ModaMintToken is IERC20, Ownable {
         uniswapV2Router.addLiquidityETH{value: b}(
             address(this), t, 0, 0, owner(), block.timestamp
         );
-        presaleActive = false;
+        // ✅ 手动添加底池后，若交易仍未开启则打开
         if (!tradingActive) {
             tradingActive = true;
             emit TradingEnabled();
         }
     }
 
-    // ===== 分红系统（swap 逻辑在主合约，会计在 tracker）=====
+    // ===== 分红系统 =====
 
     /// @notice 获取当前生效的分红代币地址（留空默认 USDT）
     function getDividendToken() public view returns (address) {
         return dividendToken == address(0) ? USDT_BSC : dividendToken;
     }
 
-    /// @notice 手动 swap 流动性累积代币 → BNB
-    function processLiquidity() external {
-        uint256 amount = pendingLiquidityTokens;
-        require(amount > 0, "No pending liquidity");
-        pendingLiquidityTokens = 0;
-
-        address[] memory path = new address[](2);
-        path[0] = address(this);
-        path[1] = uniswapV2Router.WETH();
-        _approve(address(this), address(uniswapV2Router), amount);
-        try uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            amount, 0, path, address(this), block.timestamp
-        ) {} catch {
-            pendingLiquidityTokens = pendingLiquidityTokens.add(amount);
-        }
-    }
-
-    /// @notice 手动触发分红处理（任何人可调用）
+    /// @notice 手动触发分红处理（任何人可调用），swap 积攒的代币 → 分红代币并分配
     function processDividend() external {
         require(pendingSwapForDividend > 0, "Nothing to process");
         _processDividendSwap();
     }
 
-    /// @notice 查询地址的可领取分红数量（转发到 tracker）
-    function getPendingDividend(address account) external view returns (uint256) {
-        return dividendTracker.getPendingDividend(account);
-    }
-
-    /// @notice 持有者领取分红（转发到 tracker）
+    /// @notice 持有者领取分红
     function claimDividend() external {
-        dividendTracker.claim();
+        uint256 pending = getPendingDividend(msg.sender);
+        require(pending > 0, "Nothing to claim");
+        require(_balances[msg.sender] >= minHoldForDividend, "Below min hold");
+
+        address _divToken = getDividendToken();
+        // Fix: 直接查链上余额，避免 _availableDivFunds 不同步问题
+        uint256 contractBal = IERC20(_divToken).balanceOf(address(this));
+        require(pending <= contractBal, "Insufficient dividend funds");
+
+        magnifiedDividendCorrections[msg.sender] = magnifiedDividendCorrections[msg.sender]
+            - int256(pending.mul(DIVIDEND_PRECISION));
+
+        // Fix: 检查 transfer 返回值，防止 USDT 等代币静默失败
+        require(IERC20(_divToken).transfer(msg.sender, pending), "Dividend transfer failed");
+        emit DividendClaimed(msg.sender, _divToken, pending);
     }
 
-    /// @dev 内部：swap 积攒的代币 → 分红代币，发送给 tracker 并更新分配
+    /// @notice 查询地址的可领取分红数量
+    function getPendingDividend(address account) public view returns (uint256) {
+        if (_balances[account] == 0 || dividendBps == 0) return 0;
+        if (_balances[account] < minHoldForDividend) return 0;
+        int256 mag = int256(_balances[account]) * int256(dividendsPerShare)
+                     + magnifiedDividendCorrections[account];
+        if (mag <= 0) return 0;
+        return uint256(mag) / DIVIDEND_PRECISION;
+    }
+
+    /// @notice 管理员：设置最低持仓门槛
+    function setMinHoldForDividend(uint256 amount) external onlyOwner {
+        minHoldForDividend = amount;
+    }
+
+    /// @notice 管理员：设置自动分红处理冷却期（区块数）
+    function setDividendCooldown(uint256 blocks) external onlyOwner {
+        dividendCooldown = blocks;
+    }
+
+    /// @dev 内部：swap 积攒的代币 → 分红代币并更新 dividendsPerShare
     function _processDividendSwap() internal {
         uint256 amount = pendingSwapForDividend;
         if (amount == 0) return;
@@ -510,6 +490,7 @@ contract ModaMintToken is IERC20, Ownable {
 
         uint256 balBefore = IERC20(_divToken).balanceOf(address(this));
 
+        // swap 本代币 → WBNB → dividendToken（如果 dividendToken 就是 WBNB 则只走一跳）
         _approve(address(this), address(uniswapV2Router), amount);
         if (_divToken == weth) {
             address[] memory path = new address[](2);
@@ -536,9 +517,14 @@ contract ModaMintToken is IERC20, Ownable {
 
         uint256 received = IERC20(_divToken).balanceOf(address(this)).sub(balBefore);
         if (received > 0) {
-            // 把分红代币发给 tracker
-            IERC20(_divToken).transfer(address(dividendTracker), received);
-            dividendTracker.distributeDividends(received);
+            // 按总供应量均分，更新 dividendsPerShare
+            uint256 _totalSupply = _totalSupply;
+            if (_totalSupply > 0) {
+                dividendsPerShare = dividendsPerShare.add(
+                    received.mul(DIVIDEND_PRECISION).div(_totalSupply)
+                );
+                totalDividendDistributed = totalDividendDistributed.add(received);
+            }
             emit DividendProcessed(amount, received);
         }
     }

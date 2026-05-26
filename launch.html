@@ -306,17 +306,9 @@
     .modal-overlay.show { display:flex; }
     .modal {
       background:var(--bg-card); border:1px solid var(--border);
-      border-radius:20px; padding:28px 24px; max-width:460px; width:100%;
+      border-radius:20px; padding:36px 32px; max-width:460px; width:100%;
       text-align:center; position:relative; animation:modal-in .25s ease;
-      max-height:85vh; display:flex; flex-direction:column;
     }
-    .modal-body-scroll {
-      flex:1; overflow-y:auto; min-height:0;
-      padding-right:4px; margin-right:-4px;
-    }
-    .modal-body-scroll::-webkit-scrollbar { width:4px; }
-    .modal-body-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
-    .modal-actions { flex-shrink:0; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
     @keyframes modal-in { from{opacity:0;transform:scale(.92)} to{opacity:1;transform:scale(1)} }
     .modal-icon { font-size:3.5rem; margin-bottom:16px; }
     .modal h3 { font-size:1.4rem; font-weight:900; margin-bottom:10px; }
@@ -415,8 +407,7 @@
   </style>
   <!-- ethers.js v5 本地文件 + 合约编译数据 -->
   <script src="ethers.umd.min.js"></script>
-  <script src="contract_data.js?v=20260525i"></script>
-  <script src="tracker_data.js?v=20260525i"></script>
+  <script src="contract_data.js?v=20260525b"></script>
   <script>
     // 合约代码版本校验 — 检查 bytecode 长度确保是最新编译版本
     if(typeof CONTRACT_BYTECODE === 'string'){
@@ -716,13 +707,6 @@
         <input type="number" id="min-hold-div" placeholder="100000" min="0" step="1" value="100000" />
         <span class="form-hint">持仓低于此数量无法领取分红，防止微仓撸分红（填 0 = 无门槛）</span>
       </div>
-      <div class="form-group" style="margin-top:12px">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="whitelist-mint" style="width:18px;height:18px;accent-color:var(--accent1)" />
-          <span class="form-label" style="margin:0">仅白名单可 Mint</span>
-        </label>
-        <span class="form-hint">开启后，只有管理员添加到白名单的地址才能参加 Mint。部署后可通过合约管理白名单地址</span>
-      </div>
     </div>
   </div>
 
@@ -762,7 +746,6 @@
 <!-- ══ 弹窗：发射中 ══ -->
 <div class="modal-overlay" id="modal">
   <div class="modal">
-    <div class="modal-body-scroll">
     <div class="modal-icon" id="modal-icon">🚀</div>
     <h3 id="modal-title">代币发射中！</h3>
     <p id="modal-desc">请在 MetaMask 中确认交易...</p>
@@ -873,52 +856,12 @@
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
             <span style="font-size:.8rem;color:var(--text-muted)">买入税 (bps):</span>
             <input id="admin-buy-tax" type="number" min="0" max="2500" placeholder="500" style="width:90px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
-            <button onclick="adminSetBuyTax()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,.35)">设置买入税</button>
+            <button onclick="adminSetBuyTax()" style="background:rgba(37,99,235,.3);color:#93c5fd;border:1px solid rgba(37,99,235,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置买入税</button>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <span style="font-size:.8rem;color:var(--text-muted)">卖出税 (bps):</span>
             <input id="admin-sell-tax" type="number" min="0" max="2500" placeholder="500" style="width:90px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
-            <button onclick="adminSetSellTax()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,.35)">设置卖出税</button>
-          </div>
-        </div>
-        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
-        <!-- 分红设置 -->
-        <div style="margin-bottom:6px">
-          <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">📊 分红设置</div>
-          <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:6px">分红税费累积到合约，达到阈值后自动 swap 成分红代币并分配</div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-            <span style="font-size:.8rem;color:var(--text-muted)">分红阈值 (代币数量):</span>
-            <input id="admin-div-threshold" type="number" min="0" placeholder="100" style="width:110px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;color:var(--text-body);font-size:.82rem"/>
-            <button onclick="adminSetDividendThreshold()" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(22,163,74,.35)">设置阈值</button>
-          </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-            <button onclick="adminProcessDividend()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">🔄 处理分红 (swap → USDT)</button>
-            <button onclick="adminProcessLiquidity()" style="background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">💧 处理流动性 (swap → BNB)</button>
-            <button onclick="adminProcessAll()" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">⚡ 一键处理全部</button>
-            <span id="admin-div-info" style="font-size:.75rem;color:var(--text-muted)"></span>
-          </div>
-        </div>
-        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
-        <!-- Mint 白名单管理 -->
-        <div style="margin-bottom:6px">
-          <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">📋 Mint 白名单管理</div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-            <button onclick="adminToggleWhitelistMint()" id="btn-toggle-whitelist" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600">
-              🔒 查看并切换白名单模式
-            </button>
-            <span id="whitelist-mode-status" style="font-size:.78rem;color:var(--text-muted)"></span>
-          </div>
-          <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px">
-            <textarea id="admin-whitelist-input" placeholder="输入地址，每行一个&#10;0x1111...aaaa&#10;0x2222...bbbb&#10;0x3333...cccc" rows="3" style="flex:1;min-width:260px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 12px;color:var(--text-body);font-size:.82rem;font-family:monospace;resize:vertical"></textarea>
-            <div style="display:flex;flex-direction:column;gap:6px">
-              <button onclick="adminSetWhitelist(true)" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(22,163,74,.35)">✅ 添加白名单</button>
-              <button onclick="adminSetWhitelist(false)" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(220,38,38,.35)">❌ 移除白名单</button>
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-            <input id="admin-wl-check-addr" type="text" placeholder="查询地址 0x..." style="flex:1;min-width:220px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 10px;color:var(--text-body);font-size:.8rem;font-family:monospace"/>
-            <button onclick="adminCheckWhitelist()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,.35)">🔍 查询</button>
-            <span id="wl-check-result" style="font-size:.78rem;color:var(--text-muted)"></span>
+            <button onclick="adminSetSellTax()" style="background:rgba(37,99,235,.3);color:#93c5fd;border:1px solid rgba(37,99,235,.4);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.8rem">设置卖出税</button>
           </div>
         </div>
         <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:12px 0"/>
@@ -936,7 +879,7 @@
       </div>
     </div>
 
-    </div><!-- /modal-body-scroll -->
+
     <div class="modal-actions">
       <button class="btn-copy" id="btn-copy" onclick="copyContract()" style="display:none">📋 复制</button>
       <a class="btn-bscscan" id="btn-bscscan" href="#" target="_blank" style="display:none">View on BscScan ↗</a>
@@ -1238,7 +1181,6 @@ function getFormParams(){
     minHoldForDividend: ethers.utils.parseUnits(
       (document.getElementById('min-hold-div').value || '0'), 18
     ),
-    whitelistMintOnly: document.getElementById('whitelist-mint').checked,
     presaleTokenPct: presalePct  // 预售代币分配比例 (1-99)，剩余比例自动留作 LP
   };
 }
@@ -1335,7 +1277,6 @@ function buildParamsPreview(p, vanityResult, gasBNB){
     ['资金钱包', p.marketingWallet],
     ['分红代币', p.dividendToken === ethers.constants.AddressZero ? 'USDT (默认)' : p.dividendToken],
     ['分红最低持仓', ethers.utils.formatUnits(p.minHoldForDividend, 0) + ' 代币'],
-    ['白名单 Mint', p.whitelistMintOnly ? '仅白名单可 Mint' : '公开 Mint（所有人可参加）'],
     ['预售代币比例', p.presaleTokenPct + '% (LP: ' + (100 - p.presaleTokenPct) + '%)'],
   ];
   if(vanityResult && vanityResult.address){
@@ -1417,7 +1358,6 @@ async function launchToken(){
     p.marketingWallet, p.dividendToken,
     p.minHoldForDividend,
     p.presaleTokenPct,  // 预售代币分配比例 (1-99)
-    p.whitelistMintOnly,
     await signer.getAddress()  // owner_ = 用户钱包（CREATE2 工厂部署时 msg.sender 是工厂地址）
     );
     const initCode = deployTxData.data;
@@ -1546,7 +1486,7 @@ async function launchToken(){
     modalIcon.textContent = '🎉';
     modalTitle.textContent = '发射成功！';
     const gasUsed = ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice || await signer.getGasPrice()));
-    modalDesc.innerHTML = '<div style="font-size:.85rem;color:var(--success);font-weight:700;margin-bottom:4px">✅ 代币合约已成功部署到 ' + (isTestnet ? 'BSC 测试网' : 'BSC 主网') + '</div><div style="font-size:.78rem;color:var(--text-muted)">Gas 消耗: ' + parseFloat(gasUsed).toFixed(5) + ' BNB</div>';
+    modalDesc.innerHTML = '✅ 代币合约已成功部署到 ' + (isTestnet ? 'BSC 测试网' : 'BSC 主网') + '！<br/>Gas 消耗: ' + parseFloat(gasUsed).toFixed(5) + ' BNB · 区块: ' + receipt.blockNumber;
     statusText.textContent = '✅ 合约已上链确认';
     document.getElementById('contract-addr').textContent = contractAddr;
     contractBox.style.display = 'block';
@@ -1767,17 +1707,11 @@ async function downloadVerifyJsonSilent(){
   if(!_verifyContractAddr) throw new Error('合约地址未知');
   var resp = await fetch('ModaMintToken.sol');
   if(!resp.ok) throw new Error('无法读取 ModaMintToken.sol');
-  var tokenSrc = await resp.text();
-
-  var resp2 = await fetch('DividendTracker.sol');
-  if(!resp2.ok) throw new Error('无法读取 DividendTracker.sol');
-  var trackerSrc = await resp2.text();
-
+  var src = await resp.text();
   var standardJson = {
     language: 'Solidity',
     sources: {
-      'ModaMintToken.sol': { content: tokenSrc },
-      'DividendTracker.sol': { content: trackerSrc }
+      'ModaMintToken.sol': { content: src }
     },
     settings: {
       evmVersion: 'paris',
@@ -1894,14 +1828,14 @@ let _adminContract = null;
 function initAdminPanel(contractAddr) {
   _adminContractAddr = contractAddr;
   if (!contractAddr) return;
-  // 先显示面板（折叠状态）
+  // 先显示面板，再加载合约（确保面板始终可见）
   document.getElementById('admin-panel').style.display = 'block';
-  // 部署成功后不自动展开管理面板，避免弹窗内容过长
-  // const body = document.getElementById('admin-panel-body');
-  // const icon = document.getElementById('admin-toggle-icon');
-  // body.style.maxHeight = '3000px';
-  // body.style.padding = '16px';
-  // icon.textContent = '▼';
+  // 自动展开管理面板
+  const body = document.getElementById('admin-panel-body');
+  const icon = document.getElementById('admin-toggle-icon');
+  body.style.maxHeight = '3000px';
+  body.style.padding = '16px';
+  icon.textContent = '▼';
   try {
     _adminContract = new ethers.Contract(contractAddr, CONTRACT_ABI, signer);
     adminRefreshStatus();
@@ -1973,13 +1907,12 @@ async function adminRawStatus(contractAddr) {
 function toggleAdminPanel() {
   const body = document.getElementById('admin-panel-body');
   const icon = document.getElementById('admin-toggle-icon');
-  const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px' && body.style.maxHeight !== '0';
-  if (!isOpen) {
+  if (body.style.maxHeight === '0px' || body.style.maxHeight === '') {
     body.style.maxHeight = '3000px';
     body.style.padding = '16px';
     icon.textContent = '▼';
   } else {
-    body.style.maxHeight = '0';
+    body.style.maxHeight = '0px';
     body.style.padding = '0 16px';
     icon.textContent = '▶';
   }
@@ -2017,9 +1950,7 @@ async function adminRefreshStatus() {
       presaleActive, tradingActive,
       mintCostBNB, fillAmountBNB, totalBNBCollected,
       tokensPerMint, bnbBalance,
-      owner, whitelistMintOnly,
-      dividendSwapThreshold, pendingSwapForDividend,
-      pendingLiquidityTokens
+      owner
     ] = await Promise.all([
       _adminContract.presaleActive(),
       _adminContract.tradingActive(),
@@ -2028,11 +1959,7 @@ async function adminRefreshStatus() {
       _adminContract.totalBNBCollected(),
       _adminContract.tokensPerMint(),
       provider.getBalance(_adminContractAddr),
-      _adminContract.owner(),
-      _adminContract.whitelistMintOnly(),
-      _adminContract.dividendSwapThreshold(),
-      _adminContract.pendingSwapForDividend(),
-      _adminContract.pendingLiquidityTokens()
+      _adminContract.owner()
     ]);
     const fmt = v => parseFloat(ethers.utils.formatEther(v)).toFixed(4);
     const fmtTok = v => parseFloat(ethers.utils.formatUnits(v, 18)).toLocaleString();
@@ -2047,17 +1974,7 @@ async function adminRefreshStatus() {
       '<br/><b>合约 BNB 余额:</b> <span style="color:#fbbf24">' + fmt(bnbBalance) + ' BNB</span>' +
       '<br/><b>已募集 BNB:</b> ' + fmt(totalBNBCollected) + ' / ' + fmt(fillAmountBNB) + ' BNB' +
       '<br/><b>单次 Mint 费用:</b> ' + fmt(mintCostBNB) + ' BNB' +
-      '<br/><b>单次 Mint 代币:</b> ' + fmtTok(tokensPerMint) + ' tokens' +
-      '<br/><b>Mint 白名单模式:</b> ' + (whitelistMintOnly ? '<span style="color:#fbbf24">🔒 仅白名单可 Mint</span>' : '<span style="color:#4ade80">🔓 公开 Mint</span>') +
-      '<br/><b>分红阈值:</b> ' + fmtTok(dividendSwapThreshold) + ' 代币' +
-      '<br/><b>待处理分红:</b> ' + fmtTok(pendingSwapForDividend) + ' 代币' +
-      '<br/><b>待处理流动性:</b> ' + fmtTok(pendingLiquidityTokens) + ' 代币';
-
-    // 更新分红信息显示
-    const divInfo = document.getElementById('admin-div-info');
-    if (divInfo) {
-      divInfo.textContent = '流动性:' + fmtTok(pendingLiquidityTokens) + ' 分红:' + fmtTok(pendingSwapForDividend);
-    }
+      '<br/><b>单次 Mint 代币:</b> ' + fmtTok(tokensPerMint) + ' tokens';
   } catch(e) {
     box.innerHTML = '<span style="color:#f87171">❌ 读取失败: ' + e.message + '</span>';
   }
@@ -2143,146 +2060,6 @@ async function adminSetSellTax() {
     await adminRefreshStatus();
   } catch(e) {
     adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
-  }
-}
-
-/* ===== 分红设置 ===== */
-
-async function adminSetDividendThreshold() {
-  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
-  const inp = document.getElementById('admin-div-threshold');
-  const val = ethers.utils.parseUnits(inp.value || '0', 18);
-  try {
-    adminLog('⏳ 设置分红阈值: ' + (inp.value || '0') + ' 代币...');
-    const tx = await _adminContract.setDividendSwapThreshold(val);
-    await tx.wait();
-    adminLog('✅ 分红阈值已设置为 ' + (inp.value || '0') + ' 代币');
-    await adminRefreshStatus();
-  } catch(e) {
-    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
-  }
-}
-
-async function adminProcessDividend() {
-  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
-  if (!confirm('确认手动触发分红 swap？这将消耗 gas')) return;
-  try {
-    adminLog('⏳ 提交 processDividend 交易...');
-    const tx = await _adminContract.processDividend();
-    adminLog('📤 TX: ' + tx.hash.slice(0,12) + '...');
-    const receipt = await tx.wait();
-    if (receipt.status === 1) {
-      adminLog('✅ 分红 swap 成功！');
-    } else {
-      adminLog('❌ 交易失败（revert）', true);
-    }
-    await adminRefreshStatus();
-  } catch(e) {
-    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
-  }
-}
-
-async function adminProcessLiquidity() {
-  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
-  if (!confirm('确认手动触发流动性 swap？代币 → BNB，BNB 留在合约中')) return;
-  try {
-    adminLog('⏳ 提交 processLiquidity 交易...');
-    const tx = await _adminContract.processLiquidity();
-    adminLog('📤 TX: ' + tx.hash.slice(0,12) + '...');
-    const receipt = await tx.wait();
-    if (receipt.status === 1) {
-      adminLog('✅ 流动性 swap 成功！BNB 已到合约');
-    } else {
-      adminLog('❌ 交易失败（revert）', true);
-    }
-    await adminRefreshStatus();
-  } catch(e) {
-    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
-  }
-}
-
-async function adminProcessAll() {
-  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
-  if (!confirm('确认一键处理全部待 swap 税费？（流动性 + 分红）')) return;
-  try {
-    adminLog('⏳ 处理流动性...');
-    let tx = await _adminContract.processLiquidity();
-    adminLog('📤 流动性 TX: ' + tx.hash.slice(0,12) + '...');
-    await tx.wait();
-    adminLog('✅ 流动性处理完成');
-
-    adminLog('⏳ 处理分红...');
-    tx = await _adminContract.processDividend();
-    adminLog('📤 分红 TX: ' + tx.hash.slice(0,12) + '...');
-    await tx.wait();
-    adminLog('✅ 分红处理完成');
-
-    await adminRefreshStatus();
-  } catch(e) {
-    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
-  }
-}
-
-/* ===== Mint 白名单管理 ===== */
-
-async function adminToggleWhitelistMint() {
-  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
-  try {
-    const current = await _adminContract.whitelistMintOnly();
-    const newVal = !current;
-    const action = newVal ? '开启' : '关闭';
-    if (!confirm('确认' + action + '白名单 Mint 模式？' + (newVal ? '\n开启后仅白名单地址可参加 Mint' : '\n关闭后所有人可参加 Mint'))) return;
-    adminLog('⏳ ' + action + '白名单 Mint 模式...');
-    const tx = await _adminContract.setWhitelistMintOnly(newVal);
-    await tx.wait();
-    adminLog('✅ 白名单 Mint 模式已' + action);
-    document.getElementById('whitelist-mode-status').textContent = newVal ? '🔒 白名单模式' : '🔓 公开模式';
-    await adminRefreshStatus();
-  } catch(e) {
-    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
-  }
-}
-
-async function adminSetWhitelist(add) {
-  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
-  const raw = document.getElementById('admin-whitelist-input').value.trim();
-  if (!raw) { adminLog('⚠️ 请输入地址', true); return; }
-  const addresses = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-  // 验证地址格式
-  for (const a of addresses) {
-    if (!ethers.utils.isAddress(a)) {
-      adminLog('❌ 无效地址: ' + a, true);
-      return;
-    }
-  }
-  if (addresses.length === 0) { adminLog('⚠️ 没有有效地址', true); return; }
-  const action = add ? '添加' : '移除';
-  if (!confirm('确认将 ' + addresses.length + ' 个地址' + action + '白名单？')) return;
-  try {
-    adminLog('⏳ ' + action + ' ' + addresses.length + ' 个地址到白名单...');
-    const tx = await _adminContract.setMintWhitelist(addresses, add);
-    adminLog('📤 TX: ' + tx.hash.slice(0, 12) + '...');
-    await tx.wait();
-    adminLog('✅ 已' + action + ' ' + addresses.length + ' 个地址');
-    document.getElementById('admin-whitelist-input').value = '';
-  } catch(e) {
-    adminLog('❌ 错误: ' + (e.reason || e.message || e.code), true);
-  }
-}
-
-async function adminCheckWhitelist() {
-  if (!_adminContract) { adminLog('⚠️ 合约未初始化', true); return; }
-  const addr = document.getElementById('admin-wl-check-addr').value.trim();
-  const resultSpan = document.getElementById('wl-check-result');
-  if (!addr) { resultSpan.innerHTML = '<span style="color:#f87171">请输入地址</span>'; return; }
-  if (!ethers.utils.isAddress(addr)) { resultSpan.innerHTML = '<span style="color:#f87171">地址格式无效</span>'; return; }
-  try {
-    const isWl = await _adminContract.isMintWhitelisted(addr);
-    resultSpan.innerHTML = isWl
-      ? '<span style="color:#4ade80">✅ 在白名单中</span>'
-      : '<span style="color:#f87171">❌ 不在白名单中</span>';
-  } catch(e) {
-    resultSpan.innerHTML = '<span style="color:#f87171">查询失败</span>';
   }
 }
 
